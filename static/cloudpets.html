@@ -9,7 +9,7 @@ button { font-size: 14pt }
 .row { display: flex; margin: .6em 0; align-items: center }
 .row button, .row input[type=range] { flex-grow: 1; margin: .2em; height: 3em}
 
-#out { position: absolute; bottom: 0; left: 0; background: #eee; overflow: scroll; width: 100%; height: 4em; padding: 0.5em }
+#out { position: absolute; bottom: 0; left: 0; background: #eee; overflow: scroll; width: 100%; height: 4em; padding: 0.5em; box-sizing: border-box }
 #avatar { 
   background-image: url('static/animals.png'); 
   background-repeat:no-repeat;
@@ -51,15 +51,20 @@ button { font-size: 14pt }
 progress { width: 100%; display:none}
 
 #record { user-select: none }
+
+.visualizer { width: 100%; position: absolute; left: 0;  height: 4em; display: none}
 </style>
 </head>
 <body>
+
+
 
 <div class='row'>
   <div class="avatar-none" id="toy-info"><span id="avatar"> </span><span id="avatar-name">Cloud Pets</span><br>State: <span id="state">Not connected</span></div> 
   <button id="connbtn" onclick="doConnectDisconnect()">Connect</button>
 </div>
 
+  <canvas class="visualizer"></canvas>
 <div class='row' id='play-buttons'>
     Play slot:
     <!--<button id="stop" onclick="sendPlayCommand(0)">Stop</button>-->
@@ -67,8 +72,8 @@ progress { width: 100%; display:none}
 
 <div class='row'>
     <button onclick="sendRecordCommand(1)">Record with toy mic (slot 1)</button>
-    <button onclick="sendRecvAudioCommand()" disabled>Fetch Recording</button>
-    <button onclick="document.getElementById('audio').play()" id="play-rec-button" disabled>Play</button>
+    <button onclick="sendRecvAudioCommand()">Fetch Recording</button>
+    <button onclick="startDownloadPlayback()" id="play-rec-button">Play</button>
     <audio id="audio" />
 </div>
 
@@ -82,7 +87,7 @@ progress { width: 100%; display:none}
 <div class='row'>
   <button onclick="sendAudio('exterminate1.au', 1)">Send audio to slot 2</button>
   <button onclick="sendAudio('exterminate2.au', 2)">Send audio to slot 3</button>
-  <button id="record" ontouchstart="startRecord()" ontouchend="endRecord()">🎤 (slot 4)</button>
+  <button id="record">🎤 Rec</button>
 </div>
 <progress max="100"></progress>
 
@@ -172,7 +177,7 @@ function log(s) {
 }
 var audiobuffer;
 var audiobuffer_offset = 0;
-
+var audiobuffer_total_len;
 var send_data;
 var send_pos = 0;
 var send_buffer_size = 0;
@@ -199,7 +204,9 @@ function handleStateChanged(event) {
     }
   }
   if (new_state == state.PLAYBACK && current_play_slot >= 0) {
-    play_buttons[current_play_slot].textContent = '🔊';
+    var el = play_buttons[current_play_slot];
+    if (el) 
+        el.textContent = '🔊';
   } 
   if (new_state == state.IDLE && current_state == state.PLAYBACK) {
     play_buttons[current_play_slot].textContent = current_play_slot;
@@ -308,10 +315,8 @@ async function sendNextChunk() {
   }
 }
 
-navigator.getUserMedia(
-  {audio: true },
-
-  // Success callback
+navigator.getUserMedia( {audio: true },
+  // Success callback;
   function(stream) {
       mediaRecorder = new MediaRecorder(stream);
       mediaRecorder.ondataavailable = function(e) {
@@ -330,23 +335,65 @@ navigator.getUserMedia(
           sendAudio(encoded_data, 3);
       };
   },
-
   // Error callback
   function(err) {
       console.log('The following gUM error occured: ' + err);
   }
 );
 
-async function checkCodecSupport() {
-  log('about to send')
-  let resp = await fetch('codecs-enabled');
-  log('got response')
-  let txt = await resp.text();
-  log('got text')
-  log(txt);
+var showWaveform = false;
+
+// From https://mdn.github.io/web-dictaphone/
+function visualise(stream) {
+  canvas.style.display = 'block';
+  showWaveform = true;
+  var source = audioCtx.createMediaStreamSource(stream);
+  var analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 2048;
+  var bufferLength = analyser.frequencyBinCount;
+  var dataArray = new Uint8Array(bufferLength);
+  source.connect(analyser);
+  //analyser.connect(audioCtx.destination);
+  var WIDTH = canvas.width
+  var HEIGHT = canvas.height;
+  draw();
+
+  function draw() {
+    if (showWaveform) {
+      requestAnimationFrame(draw);
+    } else {
+      canvas.style.display = 'none';
+      return;
+    }
+    analyser.getByteTimeDomainData(dataArray);
+    canvasCtx.fillStyle = 'rgb(230, 230, 230)';
+    canvasCtx.fillRect(0, 0, WIDTH, HEIGHT);
+    canvasCtx.lineWidth = 1;
+    canvasCtx.strokeStyle = 'rgb(0, 0, 0)';
+    canvasCtx.beginPath();
+
+    var sliceWidth = WIDTH * 1.0 / bufferLength;
+    var x = 0;
+
+    for(var i = 0; i < bufferLength; i++) {
+      var v = dataArray[i] / 128.0;
+      var y = v * HEIGHT/2;
+      if (i === 0) {
+        canvasCtx.moveTo(x, y);
+      } else {
+        canvasCtx.lineTo(x, y);
+      }
+      x += sliceWidth;
+    }
+    canvasCtx.lineTo(canvas.width, canvas.height/2);
+    canvasCtx.stroke();
+
+  }
 }
 
-function startRecord() {
+function startRecord(ev) {
+  ev.preventDefault();
+  visualise(mediaRecorder.stream)
   mediaRecorder.start();
   console.log(mediaRecorder.state);
   console.log("recorder started");
@@ -355,7 +402,20 @@ function startRecord() {
   record_chunks = [];
 }
 
-function endRecord() {
+function startDownloadPlayback() {
+  var audioEl = document.getElementById('audio');
+  audioEl.play();
+  /*visualise(audioEl.srcObject);
+  audioEl.addEventListener('ended', () => { 
+    log('Playback ended');
+    audioEl.removeElementListener('ended'); 
+    showWaveform = false; 
+  }, false);*/
+}
+
+function endRecord(ev) {
+  ev.preventDefault();
+  showWaveform = false;
   mediaRecorder.stop();
   console.log(mediaRecorder.state);
   console.log("recorder stopped");
@@ -375,8 +435,17 @@ function handleRecvAudio(event) {
     for (var i=0; i < buf.byteLength; i++) {
       audiobuffer[audiobuffer_offset+i] = buf.getUint8(i);
     }
-    if (audiobuffer_offset % 100 == 0) {
+    if (audiobuffer_offset == 0) {
+      let total_frames = (buf.getUint8(9) << 8) + buf.getUint8(8);
+      console.log('total_frames', total_frames);
+      audiobuffer_total_len = total_frames * 20;
+      document.querySelector('progress').max = audiobuffer_total_len;
+      document.querySelector('progress').value = 0;
+      document.querySelector('progress').style.display = 'block';
+    }
+    if (audiobuffer_offset % 200 == 0) {
       console.log('offset: ' + audiobuffer_offset + ' ' + dataviewToHex(buf));
+      document.querySelector('progress').value = audiobuffer_offset;
     }  
     audiobuffer_offset += buf.byteLength;
   }
@@ -384,6 +453,8 @@ function handleRecvAudio(event) {
 
 async function endRecvAudio() {
   log('audio end: ' + audiobuffer_offset);
+  log('audio len: ' + audiobuffer.length);
+  document.querySelector('progress').style.display = 'none';
   audiobuffer = audiobuffer.slice(0, audiobuffer_offset);
   var blob = new Blob([audiobuffer], {type: 'applcation/octet-binary'});
 
@@ -407,7 +478,7 @@ async function decodeAudio(blob) {
   var url = URL.createObjectURL(await resp.blob());
   var audio = document.getElementById('audio');
   audio.src = url;
-  
+  log('Server decoded audio');
   var playbutton = document.getElementById('play-rec-button');
   playbutton.textContent = 'PLAY!';
 }
@@ -448,6 +519,7 @@ async function doDisconnect() {
 }
 
 function toggleSlotPlayback(slot) {
+  console.log('playing back slot ' + slot);
   if (slot == current_play_slot) {
     sendPlayCommand(0); // stop
   } else {
@@ -601,8 +673,16 @@ async function doConnect() {
   }
 }
 
+var canvas = document.querySelector('.visualizer');
+var audioCtx = new (window.AudioContext || webkitAudioContext)();
+var canvasCtx = canvas.getContext("2d");
+
+var recButton = document.getElementById('record');
+recButton.addEventListener('touchstart', startRecord);
+recButton.addEventListener('mousedown', startRecord);
+recButton.addEventListener('touchend', endRecord);
+recButton.addEventListener('mouseup', endRecord);
 makePlayButtons();
-//checkCodecSupport();
 </script>
 </body>
 </html>

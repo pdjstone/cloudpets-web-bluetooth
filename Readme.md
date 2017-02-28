@@ -16,10 +16,10 @@ The toy has 5 audio 'slots'. Each slot can store around 40 seconds of audio. The
 
 ## Important
 
- For the demo to work, you must be within Bluetooth range of the device (around 10m). I shouldn't have to tell you that you must only connect to a CloudPet toy that you own. Connecting to someone else's one is illegal, so don't do that.
+For the demo to work, you must be within Bluetooth range of the device (around 10m). I shouldn't have to tell you that you must only connect to a CloudPet toy that you own. Connecting to someone else's one is illegal, so don't do that.
 
 ## Live Demo
-There's a cut-down [live demo](https://pdjstone.github.io/cloudpets-web-bluetooth/index.html) that can upload and play some pre-recorded audio. The demo doesn't have the server-side compontent to do the encoding and decoding. But it can upload a couple of pre-encoded clips. It can also trigger the recording (and play it back on the toy itself), and control the LED.
+There's a cut-down [live demo](https://pdjstone.github.io/cloudpets-web-bluetooth/index.html) that can upload and play some pre-recorded audio. The demo doesn't have the server-side component to do the encoding and decoding. But it can upload a couple of pre-encoded clips. It can also trigger the recording (and play it back on the toy itself), and control the LED.
 
 ## Python Server
 The audio encoding/decoding functionality is done using a small Python Flask server. It uses ctypes to call into two native ARM libraries taken from the CloudPets APK to compress and decompress the audio. Since the libraries are native Android ARM binaries, the best place to run the server is on an Android device. You'll need to extract the libraries youself from the CloudPets APK and place them into the libs directory. I recommend using the excellent [Termux](https://termux.com/) Android app.
@@ -38,6 +38,6 @@ Then open Chrome, and navigate to http://localhost:5000
 
 ## Bugs and Notes
 
-The code uses Chrome's new Web Bluetooth API to communicate with the toy. I've tested the code in Chrome for Android and on a Chromebook. The audio download functionality doesn't work in Chrome due to a [bug](https://bugs.chromium.org/p/chromium/issues/detail?id=647673). 
+The code uses Chrome's new Web Bluetooth API to communicate with the toy. I've tested the code in Chrome for Android and on a Chromebook. The audio download functionality doesn't work in Chrome for Android due to a [bug](https://bugs.chromium.org/p/chromium/issues/detail?id=647673), but it does work on Chrome OS. 
 The toy uses Bluetooth LE, not classic Bluetooth therefore the it's fairly slow to upload and download the audio (it can take up to 30-40s for longer audio clips)
 
