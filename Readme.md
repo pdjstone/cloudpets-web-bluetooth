@@ -1,6 +1,6 @@
 # CloudPets Web Bluetoooth Demo
 
-So news just broke about the CloudPets server [being hacked and ransomed](https://www.troyhunt.com/data-from-connected-cloudpets-teddy-bears-leaked-and-ransomed-exposing-kids-voice-messages/). I discovered this delightful product a few months ago after detecting one with our [RaMBLE](https://play.google.com/store/apps/details?id=com.contextis.android.BLEScanner&hl=en_GB) Bluetooth LE scanner. I've been looking at the Bluetooth LE functionality of the toy.
+So news just broke about the CloudPets server [being hacked and ransomed](https://www.troyhunt.com/data-from-connected-cloudpets-teddy-bears-leaked-and-ransomed-exposing-kids-voice-messages/). The toy itself is not too secure either. I first discovered this delightful product a few months ago after detecting one with our [RaMBLE](https://play.google.com/store/apps/details?id=com.contextis.android.BLEScanner&hl=en_GB) Bluetooth LE scanner. I've been looking at the Bluetooth LE functionality of the toy since then.
 
 I'll be releasing a blog post and video tomorrow with more details about how this works. 
 
