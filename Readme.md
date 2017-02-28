@@ -2,6 +2,8 @@
 
 Blog post: [Hacking Unicorns with Web Bluetooth](https://www.contextis.com/resources/blog/hacking-unicorns-web-bluetooth/)
 
+Live demo: [here](https://pdjstone.github.io/cloudpets-web-bluetooth/index.html)
+
 The code in this repository uses the new [Web Bluetooth](https://developers.google.com/web/updates/2015/07/interact-with-ble-devices-on-the-web) feature in Chrome to demonstrate various features of the toy:
 
 1. Upload audio to the toy
