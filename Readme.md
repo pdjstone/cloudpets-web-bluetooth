@@ -1,11 +1,16 @@
 # CloudPets Web Bluetoooth Demo
 
-So news just broke about the CloudPets server [being hacked and ransomed](https://www.troyhunt.com/data-from-connected-cloudpets-teddy-bears-leaked-and-ransomed-exposing-kids-voice-messages/). I discovered this delightful product a few months ago after detecting one with our [RaMBLE](https://play.google.com/store/apps/details?id=com.contextis.android.BLEScanner&hl=en_GB) Bluetooth LE scanner. I've been looking at the Bluetooth LE functionality of the toy. The code in this repository uses the new Web Bluetooth feature in Chrome to demonstrate various features of the toy:
+So news just broke about the CloudPets server [being hacked and ransomed](https://www.troyhunt.com/data-from-connected-cloudpets-teddy-bears-leaked-and-ransomed-exposing-kids-voice-messages/). I discovered this delightful product a few months ago after detecting one with our [RaMBLE](https://play.google.com/store/apps/details?id=com.contextis.android.BLEScanner&hl=en_GB) Bluetooth LE scanner. I've been looking at the Bluetooth LE functionality of the toy.
+
+I'll be releasing a blog post and video tomorrow with more details about how this works. 
+
+The code in this repository uses the new [Web Bluetooth](https://developers.google.com/web/updates/2015/07/interact-with-ble-devices-on-the-web) feature in Chrome to demonstrate various features of the toy:
 
 1. Upload audio to the toy
 2. Trigger playback of uploaded audio
 3. Remotely trigger recording functionality
 4. Download recorded audio
+5. Make the heart LED flash
 
 The toy has 5 audio 'slots'. Each slot can store around 40 seconds of audio. The toy itself always records to slot 1.
 
