@@ -1,0 +1,1 @@
+You'll need to extract libAudio32Encoder.so and libMsAdpcm.so from the CloudPets app (https://play.google.com/store/apps/details?id=com.spiraltoys.cloudpets2.free&hl=en_GB) and place them in here.

@@ -1,0 +1,608 @@
+<html>
+<head>
+<meta charset="utf-8" />
+<title>CloudPets WebBluetooth</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body { font-family: sans}
+button { font-size: 14pt }
+.row { display: flex; margin: .6em 0; align-items: center }
+.row button, .row input[type=range] { flex-grow: 1; margin: .2em; height: 3em}
+
+#out { position: absolute; bottom: 0; left: 0; background: #eee; overflow: scroll; width: 100%; height: 4em; padding: 0.5em }
+#avatar { 
+  background-image: url('static/animals.png'); 
+  background-repeat:no-repeat;
+  display: inline-block;
+  background-size: cover;
+  width: 4em;
+  height: 4em; 
+  background-color: lightblue;
+  border-radius: 2em;
+  float: left;
+  margin-right: .5em;
+}
+#toy-info { height: 4em; flex-grow: 2 }
+#avatar-name::first-line {
+  font-weight: bold;
+  font-size: 12pt;
+}
+
+.avatar-none #avatar {
+  background-position:4em;
+}
+
+.avatar-0 #avatar {
+  background-position: 0;
+}
+.avatar-1 #avatar {
+  background-position: -4em;
+}
+.avatar-2 #avatar{
+  background-position: -8em;
+}
+.avatar-3 #avatar{
+  background-position: -12em;
+}
+.avatar-4 #avatar{
+  background-position: -16em;
+}
+
+progress { width: 100%; display:none}
+
+#record { user-select: none }
+</style>
+</head>
+<body>
+
+<div class='row'>
+  <div class="avatar-none" id="toy-info"><span id="avatar"> </span><span id="avatar-name">Cloud Pets</span><br>State: <span id="state">Not connected</span></div> 
+  <button id="connbtn" onclick="doConnectDisconnect()">Connect</button>
+</div>
+
+<div class='row' id='play-buttons'>
+    Play slot:
+    <!--<button id="stop" onclick="sendPlayCommand(0)">Stop</button>-->
+</div>
+
+<div class='row'>
+    <button onclick="sendRecordCommand(1)">Record with toy mic (slot 1)</button>
+    <button onclick="sendRecvAudioCommand()" disabled>Fetch Recording</button>
+    <button onclick="document.getElementById('audio').play()" id="play-rec-button" disabled>Play</button>
+    <audio id="audio" />
+</div>
+
+<div class='row'>
+  <button onclick="setLedState('off')">LED Off</button>
+  <button onclick="setLedState('on')">LED On</button>
+  <button onclick="setLedState('blink', 100)">Blink Fast</button>
+  <button onclick="setLedState('blink', 1000)">Blink Slow</button>
+</div>
+
+<div class='row'>
+  <button onclick="sendAudio('exterminate1.au', 1)">Send audio to slot 2</button>
+  <button onclick="sendAudio('exterminate2.au', 2)">Send audio to slot 3</button>
+  <button id="record" ontouchstart="startRecord()" ontouchend="endRecord()">🎤 (slot 4)</button>
+</div>
+<progress max="100"></progress>
+
+<div class='row'>
+Volume <input id="volume-slider" type="range" min="0" max="255" onchange="setVolume(this.value)"/>
+</div>
+<div id="out" style="white-space:pre">Console Log
+  
+
+</div>
+
+<script>
+
+var device;
+var is_connected = false;
+var current_play_slot = 0;
+var current_state = 0;
+
+const cloudpets_service = 'aaddf75d-a95a-0000-0000-3ca499b74009';
+
+var cloudpets_uuids = {
+  'cmd':        'aaddf75d-a95a-0000-0001-3ca499b74009',
+  'audio_send': 'aaddf75d-a95a-0000-0002-3ca499b74009',
+  'audio_recv': 'aaddf75d-a95a-0000-0003-3ca499b74009',
+  'state':      'aaddf75d-a95a-0000-0004-3ca499b74009',
+  'data_req':   'aaddf75d-a95a-0000-0005-3ca499b74009',
+  'config':     'aaddf75d-a95a-0000-0006-3ca499b74009',
+  'led':        'aaddf75d-a95a-0000-0007-3ca499b74009',
+  'volume':     'aaddf75d-a95a-0000-0008-3ca499b74009'
+}
+
+var cloudpets_models = [
+  { name: 'Bentley the Bear'},
+  { name: 'Charley the Cat'},
+  { name: 'Diesel the Dog'},
+  { name: 'Bubbles the Bunny'},
+  { name: 'Starburst the Unicorn'}
+];
+
+var state = {
+  IDLE: 1,
+  AUDIO_UPLOAD: 3,
+  PLAYBACK: 5,
+  AUDIO_DOWNLOAD: 7,
+  BUFFER_PRIME: 9
+}
+
+var state_names = {
+    0:  'Invalid',
+    1:  'Idle',
+    2:  'Audio record',
+    3:  'Audio upload',
+    4:  'Unplayed recording',
+    5:  'Audio playback',
+    6:  'Audio streaming',
+    7:  'Audio download',
+    8:  'Audio get record length',
+    9:  'Buffer prime',
+    10: 'Test mode startup',
+    11: 'Test mode record',
+    12: 'Test mode record end',
+    13: 'Test mode idle',
+    14: 'Test mode playback',
+    15: 'Security key check failed',
+    16: 'Initialize',
+    17: 'Audio get return value',
+    18: 'Game mode record paw pressed',
+    19: 'Game mode play paw pressed',
+}
+
+var uuid_lookup = {};
+for (var name in cloudpets_uuids) {
+  var uuid = cloudpets_uuids[name];
+  uuid_lookup[uuid] = name;
+}
+
+var chars = {};
+var play_buttons = [];
+
+const utf8 = new TextDecoder('utf-8');
+
+function log(s) {
+  let o = document.getElementById('out')
+  o.textContent += s + '\n';
+  o.scrollTop = o.scrollHeight;
+  console.log(s);
+}
+var audiobuffer;
+var audiobuffer_offset = 0;
+
+var send_data;
+var send_pos = 0;
+var send_buffer_size = 0;
+var is_sending_audio = false;
+
+var mediaRecorder;
+var record_chunks;
+
+function handleStateChanged(event) {
+  let buf = event.target.value
+  let new_state = buf.getUint8(0);
+  s = '';
+  if (buf.byteLength > 0) {
+    s = dataviewToHex(buf);
+  }
+  log('> New state  is ' + state_names[new_state] + ' (' + new_state + ') ' + s);
+  document.getElementById('state').textContent = state_names[new_state];
+
+  if (waitingForStates.hasOwnProperty(new_state)) {
+    let fns = waitingForStates[new_state];
+    delete waitingForStates[new_state];
+    for (let i=0; i < fns.length; i++) {
+      fns[i]();
+    }
+  }
+  if (new_state == state.PLAYBACK && current_play_slot >= 0) {
+    play_buttons[current_play_slot].textContent = '🔊';
+  } 
+  if (new_state == state.IDLE && current_state == state.PLAYBACK) {
+    play_buttons[current_play_slot].textContent = current_play_slot;
+    current_play_slot = 0;
+  }
+  if (new_state == state.AUDIO_DOWNLOAD) {
+    startRecvAudio();
+  }
+  if (current_state == state.AUDIO_DOWNLOAD && new_state == state.IDLE) {
+    endRecvAudio();
+  }
+  current_state = new_state;
+}
+
+async function sendAudio(filename, slot) {
+  var buf;
+  if (filename.constructor == String) {
+    let req = new Request('au/' + filename);
+    let resp = await fetch(req);
+    buf = await resp.arrayBuffer();
+  } else if (filename.constructor == ArrayBuffer) {
+    buf = filename;
+  }
+  send_data = new Uint8Array(buf);
+  log('got compressed audio from server, length=' + send_data.length);
+  log('sending start send audio command, slot=' + slot);
+  send_pos = 0;
+  send_buffer_size = 0;
+  chars.cmd.writeValue(new Uint8Array([0, slot, 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15])); // start send audio
+  document.querySelector('progress').max = send_data.length;
+  document.querySelector('progress').value = 0;
+  document.querySelector('progress').style.display = 'block';
+  log('waiting for buffer prime state');
+  await waitForState(state.BUFFER_PRIME);
+  log('got buffer prime');
+  is_sending_audio = true;
+  var r = await sendNextChunk();
+  log('sendNextChunk: ' + r);
+}
+
+function sleep(ms) {
+  return new Promise(resolve => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function handleDataReq(event) {
+  let buf = event.target.value;
+  let requestedSize = buf.getUint8(0) | (buf.getUint8(1) << 8);
+  //log('data-req: ' + dataviewToHex(buf));
+  if (requestedSize == 0) {
+    let transferredCount = buf.getUint8(2) | (buf.getUint8(3) << 8);
+    log('requestedSize is 0, why here? ');
+    document.querySelector('progress').style.display = 'none';
+  } else {
+    send_buffer_size += requestedSize;
+    //if (!is_sending_audio) 
+    //  log('data-request notification: requestedSize=' + requestedSize + ' send_buffer_size=' + send_buffer_size);
+    if (!is_sending_audio && current_state == state.AUDIO_UPLOAD) {
+      log('resuming audio upload');
+      is_sending_audio = true;
+      sendNextChunk();
+    }
+  }
+}
+
+var waitingForStates = {};
+
+function waitForState(state) {
+  if (!waitingForStates.hasOwnProperty(state)) {
+    waitingForStates[state] = [];
+  }
+  var s = state;
+  let p = new Promise((resolve, reject) => {
+    waitingForStates[state].push(resolve);
+  });
+  return p;
+}
+
+async function sendNextChunk() {
+  var chunkSize = 20;
+  if (send_buffer_size == 0) {
+    log("Buffer size is < chunkSize, can't send");
+    is_sending_audio = false;
+    return false;
+  } else {
+    var remaining_data = send_data.length - send_pos;
+    var len = Math.min(chunkSize, remaining_data, send_buffer_size);
+    var bytes = send_data.slice(send_pos, send_pos + len);
+    //console.log('send_pos=' + send_pos + '/' + send_data.length +  ' send_buffer_size=' + send_buffer_size + ' sending ' + len + ' bytes');
+    document.querySelector('progress').value = send_pos;
+    send_pos += len;
+    send_buffer_size -= len;
+    
+    await chars.audio_send.writeValue(bytes);
+    if (remaining_data - len > 0) {
+      setTimeout(sendNextChunk, 8);
+      return true;
+    } else {
+      is_sending_audio = false;
+      log('sending stop send audio command');
+      await chars.cmd.writeValue(new Uint8Array([1])); // stop send audio
+      log('Finished sending audio');
+      document.querySelector('progress').style.display = 'none';
+    }
+  }
+}
+
+navigator.getUserMedia(
+  {audio: true },
+
+  // Success callback
+  function(stream) {
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.ondataavailable = function(e) {
+        record_chunks.push(e.data);
+      };
+
+      mediaRecorder.onstop = async function(e) {
+          console.log("recorder stopped");
+          var blob = new Blob(record_chunks, { 'type' : 'audio/ogg; codecs=opus' });
+          var formdata = new FormData();
+          formdata.append('file', blob);
+          console.log('here');
+          var req = new Request('encode', {method: 'POST', body: formdata });
+          var resp = await fetch(req);
+          var encoded_data = await resp.arrayBuffer();
+          sendAudio(encoded_data, 3);
+      };
+  },
+
+  // Error callback
+  function(err) {
+      console.log('The following gUM error occured: ' + err);
+  }
+);
+
+async function checkCodecSupport() {
+  log('about to send')
+  let resp = await fetch('codecs-enabled');
+  log('got response')
+  let txt = await resp.text();
+  log('got text')
+  log(txt);
+}
+
+function startRecord() {
+  mediaRecorder.start();
+  console.log(mediaRecorder.state);
+  console.log("recorder started");
+  document.getElementById('record').style.background = 'red';
+  record.style.background = "red";
+  record_chunks = [];
+}
+
+function endRecord() {
+  mediaRecorder.stop();
+  console.log(mediaRecorder.state);
+  console.log("recorder stopped");
+  record.style.background = "";
+}
+
+function startRecvAudio() {
+  audiobuffer = new Uint8Array(256000);
+  audiobuffer_offset = 0;
+}
+
+function handleRecvAudio(event) {
+  let buf = event.target.value;
+  if (audiobuffer_offset + buf.byteLength >= audiobuffer.byteLength) {
+    console.log('.');
+  } else {
+    for (var i=0; i < buf.byteLength; i++) {
+      audiobuffer[audiobuffer_offset+i] = buf.getUint8(i);
+    }
+    if (audiobuffer_offset % 100 == 0) {
+      console.log('offset: ' + audiobuffer_offset + ' ' + dataviewToHex(buf));
+    }  
+    audiobuffer_offset += buf.byteLength;
+  }
+}
+
+async function endRecvAudio() {
+  log('audio end: ' + audiobuffer_offset);
+  audiobuffer = audiobuffer.slice(0, audiobuffer_offset);
+  var blob = new Blob([audiobuffer], {type: 'applcation/octet-binary'});
+
+  //var a = document.createElement('a');
+  //var url = URL.createObjectURL(blob);
+  //a.href = url;
+  //a.download = 'cloudpets_rec.bin';
+  //document.body.appendChild(a);
+  //a.click();
+  //log('downloading url ' + url);
+  //URL.revokeObjectURL(url);
+  decodeAudio(blob);
+}
+
+async function decodeAudio(blob) {
+  var formdata = new FormData();
+  formdata.append('file', blob);
+
+  var req = new Request('decode', {method: 'POST', body: formdata });
+  var resp = await fetch(req);
+  var url = URL.createObjectURL(await resp.blob());
+  var audio = document.getElementById('audio');
+  audio.src = url;
+  
+  var playbutton = document.getElementById('play-rec-button');
+  playbutton.textContent = 'PLAY!';
+}
+
+
+function onDisconnected() {
+  log('> Bluetooth Device disconnected');
+  is_connected = false;
+  document.getElementById('connbtn').textContent = 'Connect';
+  document.getElementById('toy-info').className = 'avatar-none';
+}
+
+function makePlayButtons() {
+  var el = document.getElementById('play-buttons');
+  for (var i=1; i <= 5; i++) {
+    var b = document.createElement('button');
+    b.textContent = i;
+    b.addEventListener('click', toggleSlotPlayback.bind(null, i));
+    play_buttons[i] = b;
+    el.appendChild(b);
+  }
+}
+
+function setVolume(level, changeSlider) {
+  log('Setting volume to ' + level);
+  chars.volume.writeValue(new Uint8Array([0, level]));
+  if (changeSlider)
+    document.getElementById('volume-slider').value = level;
+}
+
+async function doDisconnect() {
+  try {
+    log('Disconnecting from GATT Server...');
+    device.gatt.disconnect();
+  } catch (e) {
+    log('Argh! ' + e);
+  }
+}
+
+function toggleSlotPlayback(slot) {
+  if (slot == current_play_slot) {
+    sendPlayCommand(0); // stop
+  } else {
+    sendPlayCommand(slot);
+  }
+}
+
+function sendRecvAudioCommand() {
+  try {
+    log('Sending receive audio command');
+    chars.cmd.writeValue(new Uint8Array([2]));
+  } catch (e) { 
+    log('Argh! ' + e);
+  }
+}
+
+function sendPlayCommand(slot) {
+  try {
+    if (slot == 0) {
+      log('Stopping playback');
+    } else {
+      log('Sending play command for slot ' + slot);
+    }
+    var playCmd = new Uint8Array([8, 1, slot]);
+    chars.cmd.writeValue(playCmd);
+    if (slot > 0)
+      current_play_slot = slot;
+  } catch (e) {
+    log('Argh! ' + e);
+  }
+}
+
+async function sendRecordCommand() {
+  try {
+    var recCmd = new Uint8Array([8, 2]);
+    chars.cmd.writeValue(recCmd);
+  } catch (e) {
+    log('Argh! ' + e);
+  }
+}
+
+function setLedState(state, ms) {
+  try {
+    var cmd = [0, 0, 0, 100, 0];
+    if (state == 'on') {
+      cmd[0] = 1;
+    } else if (state == 'off') {
+      cmd[0] = 0;
+    } else if (state == 'blink') {
+      cmd[0] = 2;
+      cmd[1] = ms & 0xff;
+      cmd[2] = ms >> 8;
+    }
+    chars.led.writeValue(new Uint8Array(cmd));
+  } catch (e) {
+    log('Argh! ' + e);
+  }
+}
+
+function parseCloudPetsConfig(str) {
+  let regex = /(\d\d)(\d\d)_(\d\d)_(\d\d)_(\d\d)_(\d\d)/;
+  let match = str.match(regex);
+  if (match) { 
+    let modelId = parseInt(match[1])
+    let model = cloudpets_models[modelId];
+    let setup_time = match[4] + ':' + match[5];
+    let setup_date = match[1] + '/' + match[2];
+    log(model['name'] + ' was set up on ' + setup_date + ' at ' + setup_time);
+    document.getElementById('toy-info').className = 'avatar-' + modelId;
+    document.getElementById('avatar-name').innerHTML = model['name'] + '<Br>Activated: ' + setup_date;
+  } else {
+    log('Not Configured!');
+  }
+}
+
+function doConnectDisconnect() {
+  if (is_connected) {
+    doDisconnect();
+  } else {
+    doConnect();
+  }
+}
+
+function dataviewToHex(dv) {
+  var s = '';
+  for (var i=0; i < dv.byteLength; i++) {
+    s += ('0' + dv.getUint8(i).toString(16)).substr(-2);
+  }
+  return s;
+}
+
+async function doConnect() {
+  try {
+    log('Requesting Bluetooth Devices with CloudPets* prefix...');
+
+    device = await navigator.bluetooth.requestDevice({
+        filters: [{ namePrefix: 'CloudPets'}], 
+        optionalServices: ['generic_access', cloudpets_service]});
+
+    device.addEventListener('gattserverdisconnected', onDisconnected);
+
+    log('Connecting to GATT Server...');
+    const server = await device.gatt.connect();
+
+    is_connected = true;
+
+    document.getElementById('connbtn').textContent = 'Disconnect';
+
+    log('Getting CloudPets Service...');
+    const service = await server.getPrimaryService(cloudpets_service);
+
+    log('Getting CloudPets Characteristics...');
+    const characteristics = await service.getCharacteristics();
+
+    // put handles to characteristics into chars object
+    for (const characteristic of characteristics) {
+      var uuid = characteristic.uuid;
+      var name = uuid_lookup[uuid];
+      var props = '';
+      for (k in characteristic.properties) {
+        if (characteristic.properties[k]) props += k + ' ';
+      }
+      log('> Got Characteristic: ' + uuid + ' - ' + name + ' (' + props + ')');
+      chars[name] = characteristic;
+    }
+
+    // enable notifications
+    chars.state.addEventListener('characteristicvaluechanged', handleStateChanged);
+    await chars.state.startNotifications();
+
+    chars.audio_recv.addEventListener('characteristicvaluechanged', handleRecvAudio);
+    await chars.audio_recv.startNotifications();
+
+    chars.data_req.addEventListener('characteristicvaluechanged', handleDataReq);
+    await chars.data_req.startNotifications();
+
+    await chars.config.readValue().then(value => {
+      var valstr = utf8.decode(value);
+      log('> Config: ' + valstr);
+      parseCloudPetsConfig(valstr);
+    });
+    await chars.volume.readValue().then(value => {
+      var vol = value.getUint8(1);
+      log('> Read volume: ' + vol);
+      document.getElementById('volume-slider').value = vol;
+    })
+    await chars.state.readValue().then(handleStateChanged);
+    setVolume(100, true);
+  } catch(error) {
+    log('Argh! ' + error);
+  }
+}
+
+makePlayButtons();
+//checkCodecSupport();
+</script>
+</body>
+</html>
