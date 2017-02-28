@@ -14,9 +14,9 @@ The code in this repository uses the new [Web Bluetooth](https://developers.goog
 
 The toy has 5 audio 'slots'. Each slot can store around 40 seconds of audio. The toy itself always records to slot 1.
 
-## Disclaimer
+## Important
 
-I shouldn't have to tell you that you must only connect to a CloudPet toy that you own. Connecting to someone else's one is illegal, so don't do that.
+ For the demo to work, you must be within Bluetooth range of the device (around 10m). I shouldn't have to tell you that you must only connect to a CloudPet toy that you own. Connecting to someone else's one is illegal, so don't do that.
 
 ## Live Demo
 There's a cut-down [live demo](https://pdjstone.github.io/cloudpets-web-bluetooth/index.html) that can upload and play some pre-recorded audio. The demo doesn't have the server-side compontent to do the encoding and decoding. But it can upload a couple of pre-encoded clips. It can also trigger the recording (and play it back on the toy itself), and control the LED.
