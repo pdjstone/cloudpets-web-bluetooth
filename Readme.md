@@ -30,8 +30,8 @@ Once you've installed Termux run the following commands in its terminal:
 apt install python git
 pip install flask
 git clone https://github.com/pdjstone/cloudpets-web-bluetooth.git
-cd cloudpets-web-ble
-python cloudpets_server.python
+cd cloudpets-web-bluetooth
+python cloudpets_server.py
 ```
 
 Then open Chrome, and navigate to http://localhost:5000
