@@ -1,8 +1,6 @@
 # CloudPets Web Bluetoooth Demo
 
-So news just broke about the CloudPets server [being hacked and ransomed](https://www.troyhunt.com/data-from-connected-cloudpets-teddy-bears-leaked-and-ransomed-exposing-kids-voice-messages/). The toy itself is not too secure either. I first discovered this delightful product a few months ago after detecting one with our [RaMBLE](https://play.google.com/store/apps/details?id=com.contextis.android.BLEScanner&hl=en_GB) Bluetooth LE scanner. I've been looking at the Bluetooth LE functionality of the toy since then.
-
-I'll be releasing a blog post and video tomorrow with more details about how this works. 
+Blog post: [Hacking Unicorns with Web Bluetooth](https://www.contextis.com/resources/blog/hacking-unicorns-web-bluetooth/)
 
 The code in this repository uses the new [Web Bluetooth](https://developers.google.com/web/updates/2015/07/interact-with-ble-devices-on-the-web) feature in Chrome to demonstrate various features of the toy:
 
@@ -20,7 +18,7 @@ For the demo to work, you must be within Bluetooth range of the device (around 1
 
 ## Live Demo
 There's a cut-down [live demo](https://pdjstone.github.io/cloudpets-web-bluetooth/index.html) that can upload and play some pre-recorded audio. The demo doesn't have the server-side component to do the encoding and decoding. But it can upload a couple of pre-encoded clips. It can also trigger the recording (and play it back on the toy itself), and control the LED.
-
+/
 ## Python Server
 The audio encoding/decoding functionality is done using a small Python Flask server. It uses ctypes to call into two native ARM libraries taken from the CloudPets APK to compress and decompress the audio. Since the libraries are native Android ARM binaries, the best place to run the server is on an Android device. You'll need to extract the libraries youself from the CloudPets APK and place them into the libs directory. I recommend using the excellent [Termux](https://termux.com/) Android app.
 
@@ -38,6 +36,6 @@ Then open Chrome, and navigate to http://localhost:5000
 
 ## Bugs and Notes
 
-The code uses Chrome's new Web Bluetooth API to communicate with the toy. I've tested the code in Chrome for Android and on a Chromebook. The audio download functionality doesn't work in Chrome for Android due to a [bug](https://bugs.chromium.org/p/chromium/issues/detail?id=647673), but it does work on Chrome OS. 
-The toy uses Bluetooth LE, not classic Bluetooth therefore the it's fairly slow to upload and download the audio (it can take up to 30-40s for longer audio clips)
-
+* The code uses Chrome's new Web Bluetooth API to communicate with the toy. I've tested the code in Chrome for Android and on a Chromebook. The audio download functionality doesn't work in Chrome for Android due to a [bug](https://bugs.chromium.org/p/chromium/issues/detail?id=647673), but it does work on Chrome OS. 
+* The toy uses Bluetooth LE, not classic Bluetooth therefore the it's fairly slow to upload and download the audio (it can take up to 30-40s for longer audio clips)
+* The compression/decompression libraries are compiled for 32-bit ARM. To get them working under Termux, you'll unfortunately to run them on a 32-bit Android device. I tried and failed to get a the 32-bit version of Python installed under Termux on a newer phone. If anyone knows how to make it work, please let me know.
