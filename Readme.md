@@ -38,6 +38,6 @@ Then open Chrome, and navigate to http://localhost:5000
 
 ## Bugs and Notes
 
-* The code uses Chrome's new Web Bluetooth API to communicate with the toy. I've tested the code in Chrome for Android and on a Chromebook. The audio download functionality doesn't work in Chrome for Android due to a [bug](https://bugs.chromium.org/p/chromium/issues/detail?id=647673), but it does work on Chrome OS. 
+* The code uses Chrome's new Web Bluetooth API to communicate with the toy. I've tested the code in Chrome for Android and on a Chromebook. Chrome for Android had a [bug](https://bugs.chromium.org/p/chromium/issues/detail?id=647673) that affected the audio download feature. That bug is now fixed in Chrome Canary, and the Beta/main versions should pick it up in due course. 
 * The toy uses Bluetooth LE, not classic Bluetooth therefore the it's fairly slow to upload and download the audio (it can take up to 30-40s for longer audio clips)
 * The compression/decompression libraries are compiled for 32-bit ARM. To get them working under Termux, you'll unfortunately to run them on a 32-bit Android device. I tried and failed to get a the 32-bit version of Python installed under Termux on a newer phone. If anyone knows how to make it work, please let me know.
